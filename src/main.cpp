@@ -8,6 +8,8 @@
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
+#include "spline.h"
+#include "waypoint.h"
 
 using namespace std;
 
@@ -136,23 +138,23 @@ vector<double> getFrenet(double x, double y, double theta, const vector<double> 
 }
 
 // Transform from Frenet s,d coordinates to Cartesian x,y
-vector<double> getXY(double s, double d, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
+vector<double> getXY(double s, double d, const vector<Waypoint> &maps_waypoints)
 {
 	int prev_wp = -1;
 
-	while(s > maps_s[prev_wp+1] && (prev_wp < (int)(maps_s.size()-1) ))
+	while(s > maps_waypoints[prev_wp+1].s && (prev_wp < (int)(maps_waypoints.size()-1) ))
 	{
 		prev_wp++;
 	}
 
-	int wp2 = (prev_wp+1)%maps_x.size();
+	int wp2 = (prev_wp+1)%maps_waypoints.size();
 
-	double heading = atan2((maps_y[wp2]-maps_y[prev_wp]),(maps_x[wp2]-maps_x[prev_wp]));
+	double heading = atan2((maps_waypoints[wp2].y-maps_waypoints[prev_wp].y),(maps_waypoints[wp2].x-maps_waypoints[prev_wp].x));
 	// the x,y,s along the segment
-	double seg_s = (s-maps_s[prev_wp]);
+	double seg_s = (s-maps_waypoints[prev_wp].s);
 
-	double seg_x = maps_x[prev_wp]+seg_s*cos(heading);
-	double seg_y = maps_y[prev_wp]+seg_s*sin(heading);
+	double seg_x = maps_waypoints[prev_wp].x+seg_s*cos(heading);
+	double seg_y = maps_waypoints[prev_wp].y+seg_s*sin(heading);
 
 	double perp_heading = heading-pi()/2;
 
@@ -167,11 +169,7 @@ int main() {
   uWS::Hub h;
 
   // Load up map values for waypoint's x,y,s and d normalized normal vectors
-  vector<double> map_waypoints_x;
-  vector<double> map_waypoints_y;
-  vector<double> map_waypoints_s;
-  vector<double> map_waypoints_dx;
-  vector<double> map_waypoints_dy;
+  vector<Waypoint> map_waypoints;
 
   // Waypoint map to read from
   string map_file_ = "../data/highway_map.csv";
@@ -183,24 +181,16 @@ int main() {
   string line;
   while (getline(in_map_, line)) {
   	istringstream iss(line);
-  	double x;
-  	double y;
-  	float s;
-  	float d_x;
-  	float d_y;
-  	iss >> x;
-  	iss >> y;
-  	iss >> s;
-  	iss >> d_x;
-  	iss >> d_y;
-  	map_waypoints_x.push_back(x);
-  	map_waypoints_y.push_back(y);
-  	map_waypoints_s.push_back(s);
-  	map_waypoints_dx.push_back(d_x);
-  	map_waypoints_dy.push_back(d_y);
+    Waypoint waypoint;
+  	iss >> waypoint.x;
+  	iss >> waypoint.y;
+  	iss >> waypoint.s;
+  	iss >> waypoint.d_x;
+  	iss >> waypoint.d_y;
+    map_waypoints.push_back(waypoint);
   }
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&map_waypoints](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -242,6 +232,39 @@ int main() {
           	vector<double> next_x_vals;
           	vector<double> next_y_vals;
 
+
+          std::cout << "previous size: " << previous_path_x.size() << std::endl;
+
+
+          ///
+          double dist_inc = 0.3;
+          for(int i = 0; i < 50; i++)
+          {
+            double next_s = car_s + (i + 1) * dist_inc;
+            double next_d = 10; // 2 - 6 - 10
+            vector<double> nextXY = getXY(next_s, next_d, map_waypoints);
+
+            next_x_vals.push_back(nextXY[0]);
+            next_y_vals.push_back(nextXY[1]);
+
+            //next_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
+            //next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
+          }
+          ///
+
+          std::cout << "Previous X ";
+
+          for (auto i = previous_path_x.begin(); i != previous_path_x.end(); ++i)
+            std::cout << *i << ' ';
+
+          std::cout << std::endl;
+
+          std::cout << "Next X ";
+
+          for (auto i = next_x_vals.begin(); i != next_x_vals.end(); ++i)
+            std::cout << *i << ' ';
+
+          std::cout << std::endl;
 
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
           	msgJson["next_x"] = next_x_vals;
