@@ -229,27 +229,118 @@ int main() {
 
           	json msgJson;
 
-          	vector<double> next_x_vals;
-          	vector<double> next_y_vals;
-
-
           std::cout << "previous size: " << previous_path_x.size() << std::endl;
 
+					int previous_size = previous_path_x.size();
+
+					vector<double> points_x;
+					vector<double> points_y;
+
+					double ref_x = car_x;
+					double ref_y = car_y;
+					double ref_yaw = deg2rad(car_yaw);
+
+					if (previous_size < 2) {
+						double prev_car_x = car_x - cos(deg2rad(car_yaw));
+						double prev_car_y = car_y - sin(deg2rad(car_yaw));
+
+						points_x.push_back(prev_car_x);
+						points_x.push_back(car_x);
+
+						points_y.push_back(prev_car_y);
+						points_y.push_back(car_y);
+					} else {
+						ref_x = previous_path_x[previous_size - 1];
+						ref_y = previous_path_y[previous_size - 1];
+
+						double ref_x_prev = previous_path_x[previous_size - 2];
+						double ref_y_prev = previous_path_y[previous_size - 2];
+
+						ref_yaw = atan2(ref_y - ref_y_prev, ref_x - ref_x_prev);
+
+						points_x.push_back(ref_x_prev);
+						points_x.push_back(ref_x);
+
+						points_y.push_back(ref_y_prev);
+						points_y.push_back(ref_y);
+					}
+
+					int lane = 0; // TODO: make it member variable
+
+					vector<double> next_wp0 = getXY(car_s + 30, 2 + 4 * lane, map_waypoints);
+					vector<double> next_wp1 = getXY(car_s + 60, 2 + 4 * lane, map_waypoints);
+					vector<double> next_wp2 = getXY(car_s + 90, 2 + 4 * lane, map_waypoints);
+
+					points_x.push_back(next_wp0[0]);
+					points_x.push_back(next_wp1[0]);
+					points_x.push_back(next_wp2[0]);
+
+					points_y.push_back(next_wp0[1]);
+					points_y.push_back(next_wp1[1]);
+					points_y.push_back(next_wp2[1]);
+
+					for (int i = 0; i < points_x.size(); i++) {
+						double shift_x = points_x[i] - ref_x;
+						double shift_y = points_y[i] - ref_y;
+
+						points_x[i] = shift_x * cos(0 - ref_yaw) - shift_y * sin(0 - ref_yaw);
+						points_y[i] = shift_x * sin(0 - ref_yaw) + shift_y * cos(0 - ref_yaw);
+					}
+
+
+					// spline
+					tk::spline s;
+
+					s.set_points(points_x, points_y);
+
+					vector<double> next_x_vals;
+					vector<double> next_y_vals;
+
+					for (int i = 0; i < previous_path_x.size(); i++) {
+						next_x_vals.push_back(previous_path_x[i]);
+						next_y_vals.push_back(previous_path_y[i]);
+					}
+
+					double target_x = 30.0;
+					double target_y = s(target_x);
+					double target_dist = distance(0, 0, target_x, target_y);
+
+					double x_add_on = 0.0;
+
+					for (int i = 0; i <= 50 - previous_path_x.size(); i++) {
+						double N = target_dist/(0.02 * 49.5 / 2.24);
+						double x_point = x_add_on + (target_x/N);
+						double y_point = s(x_point);
+
+						x_add_on = x_point;
+
+						double x_ref = x_point;
+						double y_ref = y_point;
+
+						x_point = x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw);
+						y_point = x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw);
+
+						x_point += ref_x;
+						y_point += ref_y;
+
+						next_x_vals.push_back(x_point);
+						next_y_vals.push_back(y_point);
+					}
 
           ///
-          double dist_inc = 0.3;
-          for(int i = 0; i < 50; i++)
-          {
-            double next_s = car_s + (i + 1) * dist_inc;
-            double next_d = 10; // 2 - 6 - 10
-            vector<double> nextXY = getXY(next_s, next_d, map_waypoints);
-
-            next_x_vals.push_back(nextXY[0]);
-            next_y_vals.push_back(nextXY[1]);
-
-            //next_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
-            //next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
-          }
+//          double dist_inc = 0.3;
+//          for(int i = 0; i < 50; i++)
+//          {
+//            double next_s = car_s + (i + 1) * dist_inc;
+//            double next_d = 10; // 2 - 6 - 10
+//            vector<double> nextXY = getXY(next_s, next_d, map_waypoints);
+//
+//            next_x_vals.push_back(nextXY[0]);
+//            next_y_vals.push_back(nextXY[1]);
+//
+//            //next_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
+//            //next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
+//          }
           ///
 
           std::cout << "Previous X ";
