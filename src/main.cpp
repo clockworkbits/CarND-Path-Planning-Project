@@ -347,11 +347,11 @@ int main() {
 
 					for (int i = 0; i <= 50 - previous_path_x.size(); i++) {
 						//double N = target_dist/(0.02 * 49.5 / 2.24);
-						double x_point = x_add_on + car_speed_at_end_of_path * delta_t;
-
 						if (car_speed_at_end_of_path < goal_speed) {
 							car_speed_at_end_of_path += delta_t * acceleration;
 						}
+
+						double x_point = x_add_on + car_speed_at_end_of_path * delta_t;
 
 						if (x_point > target_x) {
 							break;
@@ -361,11 +361,11 @@ int main() {
 
 						x_add_on = x_point;
 
-						double x_ref = x_point;
-						double y_ref = y_point;
+						double x_orig = x_point;
+						double y_orig = y_point;
 
-						x_point = x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw);
-						y_point = x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw);
+						x_point = x_orig * cos(ref_yaw) - y_orig * sin(ref_yaw);
+						y_point = x_orig * sin(ref_yaw) + y_orig * cos(ref_yaw);
 
 						x_point += ref_x;
 						y_point += ref_y;
