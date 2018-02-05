@@ -165,6 +165,15 @@ vector<double> getXY(double s, double d, const vector<Waypoint> &maps_waypoints)
 
 }
 
+void print(const string &name, const vector<double> &data) {
+	std::cout << name << " : ";
+
+	for (auto i = data.begin(); i != data.end(); ++i)
+		std::cout << *i << ' ';
+
+	std::cout << std::endl;
+}
+
 int main() {
   uWS::Hub h;
 
@@ -190,7 +199,18 @@ int main() {
     map_waypoints.push_back(waypoint);
   }
 
-  h.onMessage([&map_waypoints](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+	int lane = 1;
+
+	const double delta_t = 0.02;
+
+	const double max_speed = 49.5 / 2.24; // in m/s
+	const double acceleration = 5.0; // in m/s^2
+
+	double goal_speed = max_speed;
+
+	double car_speed_at_end_of_path = 0.0;
+
+	h.onMessage([&map_waypoints, &lane, &delta_t, &max_speed, &acceleration, &car_speed_at_end_of_path, &goal_speed](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -229,7 +249,9 @@ int main() {
 
           	json msgJson;
 
-          std::cout << "previous size: " << previous_path_x.size() << std::endl;
+          //std::cout << "previous size: " << previous_path_x.size() << std::endl;
+
+					//std::cout << "sensor fusion size: " << sensor_fusion.size() << std::endl;/**/
 
 					int previous_size = previous_path_x.size();
 
@@ -239,6 +261,24 @@ int main() {
 					double ref_x = car_x;
 					double ref_y = car_y;
 					double ref_yaw = deg2rad(car_yaw);
+
+					if (previous_size == 0) {
+						car_speed_at_end_of_path = car_speed / 2.24;
+					}
+
+//					if (previous_size > 1) {
+//						double x1 = previous_path_x[0];
+//						double y1 = previous_path_y[0];
+//
+//						double x2 = previous_path_x[1];
+//						double y2 = previous_path_y[1];
+//
+//						double dist = distance(x1, y1, car_x, car_y);
+//
+//						car_speed_at_end_of_path = 2.24 * dist / delta_t;
+//
+//						//std::cout << "Curr speed = " << car_speed << " est speed = " << 2.24*dist/0.02 << std::endl;
+//					}
 
 					if (previous_size < 2) {
 						double prev_car_x = car_x - cos(deg2rad(car_yaw));
@@ -264,8 +304,6 @@ int main() {
 						points_y.push_back(ref_y_prev);
 						points_y.push_back(ref_y);
 					}
-
-					int lane = 0; // TODO: make it member variable
 
 					vector<double> next_wp0 = getXY(car_s + 30, 2 + 4 * lane, map_waypoints);
 					vector<double> next_wp1 = getXY(car_s + 60, 2 + 4 * lane, map_waypoints);
@@ -308,8 +346,17 @@ int main() {
 					double x_add_on = 0.0;
 
 					for (int i = 0; i <= 50 - previous_path_x.size(); i++) {
-						double N = target_dist/(0.02 * 49.5 / 2.24);
-						double x_point = x_add_on + (target_x/N);
+						//double N = target_dist/(0.02 * 49.5 / 2.24);
+						double x_point = x_add_on + car_speed_at_end_of_path * delta_t;
+
+						if (car_speed_at_end_of_path < goal_speed) {
+							car_speed_at_end_of_path += delta_t * acceleration;
+						}
+
+						if (x_point > target_x) {
+							break;
+						}
+
 						double y_point = s(x_point);
 
 						x_add_on = x_point;
@@ -327,6 +374,9 @@ int main() {
 						next_y_vals.push_back(y_point);
 					}
 
+					std::cout << "Speed = " << car_speed_at_end_of_path << " ";
+					print("Next Points", next_x_vals);
+
           ///
 //          double dist_inc = 0.3;
 //          for(int i = 0; i < 50; i++)
@@ -343,19 +393,19 @@ int main() {
 //          }
           ///
 
-          std::cout << "Previous X ";
-
-          for (auto i = previous_path_x.begin(); i != previous_path_x.end(); ++i)
-            std::cout << *i << ' ';
-
-          std::cout << std::endl;
-
-          std::cout << "Next X ";
-
-          for (auto i = next_x_vals.begin(); i != next_x_vals.end(); ++i)
-            std::cout << *i << ' ';
-
-          std::cout << std::endl;
+//          std::cout << "Previous X ";
+//
+//          for (auto i = previous_path_x.begin(); i != previous_path_x.end(); ++i)
+//            std::cout << *i << ' ';
+//
+//          std::cout << std::endl;
+//
+//          std::cout << "Next X ";
+//
+//          for (auto i = next_x_vals.begin(); i != next_x_vals.end(); ++i)
+//            std::cout << *i << ' ';
+//
+//          std::cout << std::endl;
 
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
           	msgJson["next_x"] = next_x_vals;
