@@ -10,6 +10,7 @@
 #include "json.hpp"
 #include "spline.h"
 #include "waypoint.h"
+#include "vehicle.h"
 
 using namespace std;
 
@@ -206,7 +207,7 @@ int main() {
 	const double max_speed = 49.5 / 2.24; // in m/s
 	const double acceleration = 5.0; // in m/s^2
 
-	double goal_speed = max_speed;
+	double goal_speed = max_speed; // in m/s
 
 	double car_speed_at_end_of_path = 0.0;
 
@@ -252,8 +253,68 @@ int main() {
           //std::cout << "previous size: " << previous_path_x.size() << std::endl;
 
 					//std::cout << "sensor fusion size: " << sensor_fusion.size() << std::endl;/**/
+					// Convert the sensor fusion data into the vehicles
+
+					vector<Vehicle> vehicles;
+
+					for (int i = 0; i < sensor_fusion.size(); i++) {
+						Vehicle v(sensor_fusion[i][0], // id
+											sensor_fusion[i][1], // x
+											sensor_fusion[i][2], // y
+											sensor_fusion[i][3], // vx
+											sensor_fusion[i][4], // vy
+											sensor_fusion[i][5], // s
+											sensor_fusion[i][6]); // d
+						vehicles.push_back(v);
+					}
+
+
+//					std::cout << "   Vehicles list   " << std::endl;
+//					for (Vehicle v : vehicles) {
+//						std::cout << "Vehicle id = " << v.id << " speed = " << v.speed();
+//						for (int l = 0; l < 3; l++) {
+//							if (v.IsInLane(l)) {
+//								std::cout << " in lane = " << l;
+//							}
+//						}
+//						std::cout << std::endl;
+//					}
 
 					int previous_size = previous_path_x.size();
+
+					// Check if there is a car in front of us
+					for (Vehicle v : vehicles) {
+						double vehicle_future_s = v.FutureS(0.02 * previous_size);
+						if (v.IsInLane(lane)
+								&& vehicle_future_s > end_path_s
+								&& vehicle_future_s - end_path_s < 30.0) {
+							goal_speed = min(goal_speed, v.speed());
+							std::cout << "Slowing down to = " << goal_speed << " because of car id = " << v.id << std::endl;
+						}
+					}
+
+					// No one in front of us - we can accelerate
+					int vehicles_in_front_count = 0;
+
+					for (Vehicle v : vehicles) {
+						double vehicle_future_s = v.FutureS(0.02 * previous_size);
+
+
+						if (v.IsInLane(lane)
+								&& vehicle_future_s > end_path_s
+								&& vehicle_future_s - end_path_s < 100.0) {
+							vehicles_in_front_count++;
+						}
+					}
+
+					if (vehicles_in_front_count == 0) {
+						goal_speed = max_speed;
+						std::cout << "No on in front of us - let's accelerate"  << std::endl;
+					} else {
+						std::cout << "OK something there" << vehicles_in_front_count << std::endl;
+					}
+
+
 
 					vector<double> points_x;
 					vector<double> points_y;
@@ -349,6 +410,8 @@ int main() {
 						//double N = target_dist/(0.02 * 49.5 / 2.24);
 						if (car_speed_at_end_of_path < goal_speed) {
 							car_speed_at_end_of_path += delta_t * acceleration;
+						} else if (car_speed_at_end_of_path > goal_speed ) {
+							car_speed_at_end_of_path -= delta_t * acceleration;
 						}
 
 						double x_point = x_add_on + car_speed_at_end_of_path * delta_t;
@@ -374,8 +437,8 @@ int main() {
 						next_y_vals.push_back(y_point);
 					}
 
-					std::cout << "Speed = " << car_speed_at_end_of_path << " ";
-					print("Next Points", next_x_vals);
+//					std::cout << "Speed = " << car_speed_at_end_of_path << " ";
+//					print("Next Points", next_x_vals);
 
           ///
 //          double dist_inc = 0.3;
