@@ -431,17 +431,7 @@ int main() {
 					if (vehicles_in_front_count == 0) {
 						goal_speed = max_speed;
 						//std::cout << "No on in front of us - let's accelerate"  << std::endl;
-					} else {
-						//std::cout << "OK something there" << vehicles_in_front_count << std::endl;
 					}
-
-          // TODO: debug only
-
-//          if (car_speed / 2.24 > max_speed - 1) {
-//            lane = 2;
-//          }
-
-          // TODO: end of debug only
 
 					vector<double> points_x;
 					vector<double> points_y;
@@ -453,20 +443,6 @@ int main() {
 					if (previous_size == 0) {
 						car_speed_at_end_of_path = car_speed / 2.24;
 					}
-
-//					if (previous_size > 1) {
-//						double x1 = previous_path_x[0];
-//						double y1 = previous_path_y[0];
-//
-//						double x2 = previous_path_x[1];
-//						double y2 = previous_path_y[1];
-//
-//						double dist = distance(x1, y1, car_x, car_y);
-//
-//						car_speed_at_end_of_path = 2.24 * dist / delta_t;
-//
-//						//std::cout << "Curr speed = " << car_speed << " est speed = " << 2.24*dist/0.02 << std::endl;
-//					}
 
 					if (previous_size < 2) {
 						double prev_car_x = car_x - cos(deg2rad(car_yaw));
@@ -493,9 +469,15 @@ int main() {
 						points_y.push_back(ref_y);
 					}
 
-					vector<double> next_wp0 = getXY(car_s + 30, 2 + 4 * lane, map_waypoints);
-					vector<double> next_wp1 = getXY(car_s + 60, 2 + 4 * lane, map_waypoints);
-					vector<double> next_wp2 = getXY(car_s + 90, 2 + 4 * lane, map_waypoints);
+					double dist = 30.0;
+
+					if (action_at_end_of_path == change_lane_left || action_at_end_of_path == change_lane_right) {
+						dist = 60.0;
+					}
+
+					vector<double> next_wp0 = getXY(car_s + dist, 2 + 4 * lane, map_waypoints);
+					vector<double> next_wp1 = getXY(car_s + dist * 2, 2 + 4 * lane, map_waypoints);
+					vector<double> next_wp2 = getXY(car_s + dist * 3, 2 + 4 * lane, map_waypoints);
 
 					points_x.push_back(next_wp0[0]);
 					points_x.push_back(next_wp1[0]);
@@ -566,47 +548,13 @@ int main() {
 						next_y_vals.push_back(y_point);
 					}
 
-//					std::cout << "Speed = " << car_speed_at_end_of_path << " ";
-//					print("Next Points", next_x_vals);
+					msgJson["next_x"] = next_x_vals;
+					msgJson["next_y"] = next_y_vals;
 
-          ///
-//          double dist_inc = 0.3;
-//          for(int i = 0; i < 50; i++)
-//          {
-//            double next_s = car_s + (i + 1) * dist_inc;
-//            double next_d = 10; // 2 - 6 - 10
-//            vector<double> nextXY = getXY(next_s, next_d, map_waypoints);
-//
-//            next_x_vals.push_back(nextXY[0]);
-//            next_y_vals.push_back(nextXY[1]);
-//
-//            //next_x_vals.push_back(car_x+(dist_inc*i)*cos(deg2rad(car_yaw)));
-//            //next_y_vals.push_back(car_y+(dist_inc*i)*sin(deg2rad(car_yaw)));
-//          }
-          ///
+					auto msg = "42[\"control\","+ msgJson.dump()+"]";
 
-//          std::cout << "Previous X ";
-//
-//          for (auto i = previous_path_x.begin(); i != previous_path_x.end(); ++i)
-//            std::cout << *i << ' ';
-//
-//          std::cout << std::endl;
-//
-//          std::cout << "Next X ";
-//
-//          for (auto i = next_x_vals.begin(); i != next_x_vals.end(); ++i)
-//            std::cout << *i << ' ';
-//
-//          std::cout << std::endl;
-
-          	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
-          	msgJson["next_x"] = next_x_vals;
-          	msgJson["next_y"] = next_y_vals;
-
-          	auto msg = "42[\"control\","+ msgJson.dump()+"]";
-
-          	//this_thread::sleep_for(chrono::milliseconds(1000));
-          	ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+					//this_thread::sleep_for(chrono::milliseconds(1000));
+					ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
           
         }
       } else {
