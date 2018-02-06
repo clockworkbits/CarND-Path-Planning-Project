@@ -5,12 +5,14 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <set>
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 #include "spline.h"
 #include "waypoint.h"
 #include "vehicle.h"
+#include "action.h"
 
 using namespace std;
 
@@ -205,13 +207,15 @@ int main() {
 	const double delta_t = 0.02;
 
 	const double max_speed = 49.5 / 2.24; // in m/s
-	const double acceleration = 5.0; // in m/s^2
+	const double acceleration = 8.0; // in m/s^2
 
 	double goal_speed = max_speed; // in m/s
 
 	double car_speed_at_end_of_path = 0.0;
 
-	h.onMessage([&map_waypoints, &lane, &delta_t, &max_speed, &acceleration, &car_speed_at_end_of_path, &goal_speed](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  Action action_at_end_of_path = stay_within_lane;
+
+	h.onMessage([&map_waypoints, &lane, &delta_t, &max_speed, &acceleration, &car_speed_at_end_of_path, &goal_speed, &action_at_end_of_path](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -282,14 +286,131 @@ int main() {
 
 					int previous_size = previous_path_x.size();
 
+          if (action_at_end_of_path == change_lane_left || action_at_end_of_path == change_lane_right) {
+            if (end_path_d > 1.8 + 4 * lane && end_path_d < 2.2 + 4 * lane) {
+              action_at_end_of_path = stay_within_lane;
+            }
+          }
+
+          // Is safe to change lane left?
+          std::set<Action> safe_actions;
+          if (action_at_end_of_path == stay_within_lane) {
+            int left_lane = lane - 1;
+            if (left_lane >= 0) {
+
+              Vehicle *car_in_front = nullptr;
+              Vehicle *car_behind = nullptr;
+
+              for (Vehicle &v : vehicles) {
+                if(v.IsInLane(left_lane)) {
+                  double vehicle_future_s = v.FutureS(0.02 * previous_size);
+
+                  // Find the car in front of us
+                  if (vehicle_future_s > end_path_s) {
+                    if (car_in_front == nullptr) {
+                      car_in_front = &v;
+                    } else if (vehicle_future_s < car_in_front->FutureS(0.02 * previous_size)) {
+                      car_in_front = &v;
+                    }
+                  }
+
+                  // Find the car behind us
+                  if (vehicle_future_s < end_path_s) {
+                    if (car_behind == nullptr) {
+                      car_behind = &v;
+                    } else if (vehicle_future_s > car_behind->FutureS(0.02 * previous_size)) {
+                      car_behind = &v;
+                    }
+                  }
+                }
+              }
+
+              if (car_behind != nullptr) {
+                std::cout << "Found car behind (left) " << car_behind->id << std::endl;
+              }
+
+              bool safe_front_distance = car_in_front == nullptr || car_in_front->FutureS(0.02 * previous_size) - end_path_s > 50.0;
+              bool safe_behind_distance = car_behind == nullptr || end_path_s - car_behind->FutureS(0.02 * previous_size) > 10.0;
+
+              if (safe_front_distance && safe_behind_distance) {
+                safe_actions.insert(change_lane_left);
+              }
+
+            }
+
+            int right_lane = lane + 1;
+            if (right_lane < 3) {
+              Vehicle *car_in_front = nullptr;
+              Vehicle *car_behind = nullptr;
+
+              for (Vehicle &v : vehicles) {
+                if(v.IsInLane(right_lane)) {
+                  double vehicle_future_s = v.FutureS(0.02 * previous_size);
+
+                  // Find the car in front of us
+                  if (vehicle_future_s > end_path_s) {
+                    if (car_in_front == nullptr) {
+                      car_in_front = &v;
+                    } else if (vehicle_future_s < car_in_front->FutureS(0.02 * previous_size)) {
+                      car_in_front = &v;
+                    }
+                  }
+
+                  // Find the car behind us
+                  if (vehicle_future_s < end_path_s) {
+                    if (car_behind == nullptr) {
+                      car_behind = &v;
+                    } else if (vehicle_future_s > car_behind->FutureS(0.02 * previous_size)) {
+                      car_behind = &v;
+                    }
+                  }
+                }
+              }
+
+              if (car_behind != nullptr) {
+                std::cout << "Found car behind " << car_behind->id << std::endl;
+              }
+
+              bool safe_front_distance = car_in_front == nullptr || car_in_front->FutureS(0.02 * previous_size) - end_path_s > 50.0;
+              bool safe_behind_distance = car_behind == nullptr || end_path_s - car_behind->FutureS(0.02 * previous_size) > 10.0;
+
+              if (safe_front_distance && safe_behind_distance) {
+                safe_actions.insert(change_lane_right);
+                if (car_behind != nullptr) {
+                  std::cout << "Car behind " << car_behind->id << " distance = " << end_path_s - car_behind->FutureS(0.02 * previous_size) << std::endl;
+                }
+              }
+            }
+          }
+
+//          std::cout << "Safe actions";
+//          for (Action a : safe_actions) {
+//            std::cout << " " << a;
+//          }
+//          std::cout << std::endl;
+
+          double new_goal_speed = goal_speed;
+
 					// Check if there is a car in front of us
 					for (Vehicle v : vehicles) {
 						double vehicle_future_s = v.FutureS(0.02 * previous_size);
 						if (v.IsInLane(lane)
 								&& vehicle_future_s > end_path_s
 								&& vehicle_future_s - end_path_s < 30.0) {
-							goal_speed = min(goal_speed, v.speed());
-							std::cout << "Slowing down to = " << goal_speed << " because of car id = " << v.id << std::endl;
+              new_goal_speed = min(new_goal_speed, v.speed());
+							//std::cout << "Slowing down to = " << new_goal_speed << " because of car id = " << v.id << std::endl;
+
+              goal_speed = new_goal_speed;
+
+              if (new_goal_speed < max_speed - 5 / 2.24 && action_at_end_of_path == stay_within_lane) {
+                if (safe_actions.find(change_lane_left) != safe_actions.end()) {
+                  lane = lane - 1;
+                  action_at_end_of_path = change_lane_left;
+                } else if (safe_actions.find(change_lane_right) != safe_actions.end()) {
+                  lane = lane + 1;
+                  action_at_end_of_path = change_lane_right;
+                }
+              }
 						}
 					}
 
@@ -302,19 +423,25 @@ int main() {
 
 						if (v.IsInLane(lane)
 								&& vehicle_future_s > end_path_s
-								&& vehicle_future_s - end_path_s < 100.0) {
+								&& vehicle_future_s - end_path_s < 50.0) {
 							vehicles_in_front_count++;
 						}
 					}
 
 					if (vehicles_in_front_count == 0) {
 						goal_speed = max_speed;
-						std::cout << "No on in front of us - let's accelerate"  << std::endl;
+						//std::cout << "No on in front of us - let's accelerate"  << std::endl;
 					} else {
-						std::cout << "OK something there" << vehicles_in_front_count << std::endl;
+						//std::cout << "OK something there" << vehicles_in_front_count << std::endl;
 					}
 
+          // TODO: debug only
 
+//          if (car_speed / 2.24 > max_speed - 1) {
+//            lane = 2;
+//          }
+
+          // TODO: end of debug only
 
 					vector<double> points_x;
 					vector<double> points_y;
@@ -408,11 +535,13 @@ int main() {
 
 					for (int i = 0; i <= 50 - previous_path_x.size(); i++) {
 						//double N = target_dist/(0.02 * 49.5 / 2.24);
-						if (car_speed_at_end_of_path < goal_speed) {
-							car_speed_at_end_of_path += delta_t * acceleration;
-						} else if (car_speed_at_end_of_path > goal_speed ) {
-							car_speed_at_end_of_path -= delta_t * acceleration;
-						}
+            if (action_at_end_of_path == stay_within_lane) { // TODO: do I need this condition?
+              if (car_speed_at_end_of_path < goal_speed) {
+                car_speed_at_end_of_path += delta_t * acceleration;
+              } else if (car_speed_at_end_of_path > goal_speed) {
+                car_speed_at_end_of_path -= delta_t * acceleration;
+              }
+            }
 
 						double x_point = x_add_on + car_speed_at_end_of_path * delta_t;
 
