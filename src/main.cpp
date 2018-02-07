@@ -207,7 +207,7 @@ int main() {
 	const double delta_t = 0.02;
 
 	const double max_speed = 49.5 / 2.24; // in m/s
-	const double acceleration = 8.0; // in m/s^2
+	const double acceleration = 7.0; // in m/s^2
 
 	double goal_speed = max_speed; // in m/s
 
@@ -383,12 +383,6 @@ int main() {
             }
           }
 
-//          std::cout << "Safe actions";
-//          for (Action a : safe_actions) {
-//            std::cout << " " << a;
-//          }
-//          std::cout << std::endl;
-
           double new_goal_speed = goal_speed;
 
 					// Check if there is a car in front of us
@@ -433,6 +427,7 @@ int main() {
 						//std::cout << "No on in front of us - let's accelerate"  << std::endl;
 					}
 
+					// Generate the path
 					vector<double> points_x;
 					vector<double> points_y;
 
@@ -472,7 +467,7 @@ int main() {
 					double dist = 30.0;
 
 					if (action_at_end_of_path == change_lane_left || action_at_end_of_path == change_lane_right) {
-						dist = 60.0;
+						dist = 75.0;
 					}
 
 					vector<double> next_wp0 = getXY(car_s + dist, 2 + 4 * lane, map_waypoints);
@@ -516,14 +511,11 @@ int main() {
 					double x_add_on = 0.0;
 
 					for (int i = 0; i <= 50 - previous_path_x.size(); i++) {
-						//double N = target_dist/(0.02 * 49.5 / 2.24);
-            if (action_at_end_of_path == stay_within_lane) { // TODO: do I need this condition?
-              if (car_speed_at_end_of_path < goal_speed) {
-                car_speed_at_end_of_path += delta_t * acceleration;
-              } else if (car_speed_at_end_of_path > goal_speed) {
-                car_speed_at_end_of_path -= delta_t * acceleration;
-              }
-            }
+						if (car_speed_at_end_of_path < goal_speed) {
+							car_speed_at_end_of_path += delta_t * acceleration;
+						} else if (car_speed_at_end_of_path > goal_speed) {
+							car_speed_at_end_of_path -= delta_t * acceleration;
+						}
 
 						double x_point = x_add_on + car_speed_at_end_of_path * delta_t;
 
